@@ -14,6 +14,8 @@ license = "MIT"
 homepage = "https://github.com/Makkarik/dice-blackjack-mdp"
 repository = "https://github.com/Makkarik/dice-blackjack-mdp"
 
+package-mode = false
+
 [tool.poetry.dependencies]
 python = "^3.12"
 numpy = "^2.2.2"

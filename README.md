@@ -1,11 +1,21 @@
-# dice-blackjack-mdp
+# Blackjack, Markov and two dice
 
 ## Installation
+
+Before installing the project make sure that you have already installed [poetry](https://pypi.org/project/poetry/) for the dependencies management. 
+
+Also make sure, that your Poetry create the local virtual environment `.venv` in your project's folder.
+
+```shell
+poetry config virtualenvs.in-project true
+```
+
+After configuring the Poetry, clone the repository and launch the installation.
 
 ```shell
 git clone git@github.com:Makkarik/dice-blackjack-mdp.git
 cd dice-blackjack-mdp
-poetry install .
+poetry install
 ```
 
 ## Contribution
