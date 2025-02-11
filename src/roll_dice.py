@@ -23,7 +23,7 @@ DICE_PIPS = {
     ],
 }
 
-DICE_NUM = 4
+VAL_NUM = 6
 
 
 def draw_die(screen, center_x, center_y, value, size=100):
@@ -68,7 +68,14 @@ def show_dice(dice_values):
     """Render the dice.
 
     Launches a Pygame window and shows the dice:
-    dice_values = [player_dice1, player_dice2, dealer_dice1, dealer_dice2].
+    dice_values = [player_dice1, player_dice2, player_curr_score, dealer_dice1, dealer_dice2, dealer_curr_score].
+    Where:
+        player_dice1: score from the player's first dice
+        player_dice2: score from the player's second dice
+        player_curr_score: player's accumulative score for current game (zero in the begging)
+        dealer_dice1: score from the dealer's first dice
+        dealer_dice2: score from the dealer's second dice ('?' until player stick)
+        dealer_curr_score: dealer's accumulative score for current game (zero in the begging)
 
     """
     pygame.init()
@@ -79,7 +86,7 @@ def show_dice(dice_values):
     pygame.display.set_caption("Dice Example")
 
     # We assume dice_values is exactly four integers in 1..6
-    if len(dice_values) != DICE_NUM:
+    if len(dice_values) != VAL_NUM:
         print("Please provide exactly 4 dice values.")
         pygame.quit()
         sys.exit()
@@ -91,7 +98,7 @@ def show_dice(dice_values):
     # Adjust as needed.
 
     # Extract the dice
-    p1, p2, d1, d2 = dice_values
+    p1, p2, ps, d1, d2, ds = dice_values
 
     dealer_total = val_or_zero(d1) + val_or_zero(d2)
     player_total = val_or_zero(p1) + val_or_zero(p2)
@@ -106,9 +113,9 @@ def show_dice(dice_values):
         # Title text (optional)
         dealer_text = font.render("Dealer", True, (255, 255, 255))
         player_text = font.render("Player", True, (255, 255, 255))
-        screen.blit(dealer_text, (WIDTH // 2 - dealer_text.get_width() // 2, 20))
+        screen.blit(dealer_text, (WIDTH // 2 - dealer_text.get_width() // 2, 10))
         screen.blit(
-            player_text, (WIDTH // 2 - player_text.get_width() // 2, HEIGHT - 70)
+            player_text, (WIDTH // 2 - player_text.get_width() // 2, HEIGHT - 50)
         )
 
         # Write total sum
@@ -117,6 +124,15 @@ def show_dice(dice_values):
         screen.blit(dealer_sum, (WIDTH // 2 - 5, 110))
         screen.blit(player_sum, (WIDTH // 2 - 5, HEIGHT - 140))
 
+        # Wrire current score
+        score_text = font.render("Score:", True, (255, 255, 255))
+        dealer_score = font.render(f"{ds}", True, (255, 255, 255))
+        player_score = font.render(f"{ps}", True, (255, 255, 255))
+        screen.blit(score_text, (15, 20))
+        screen.blit(dealer_score, (55, 55))
+        screen.blit(score_text, (15, HEIGHT - 90))
+        screen.blit(player_score, (55, HEIGHT - 55))
+
         # Draw the four dice
         # Dealer dice on top
         draw_die(screen, WIDTH // 2 - 100, HEIGHT // 2 - 75, d1, size=100)
@@ -124,6 +140,8 @@ def show_dice(dice_values):
         # Player dice on bottom
         draw_die(screen, WIDTH // 2 - 100, HEIGHT // 2 + 75, p1, size=100)
         draw_die(screen, WIDTH // 2 + 100, HEIGHT // 2 + 75, p2, size=100)
+        # Line between player and dealer
+        pygame.draw.line(screen, (255, 0, 0), (0, HEIGHT // 2), (WIDTH, HEIGHT // 2), 10)
 
         pygame.display.flip()
 
