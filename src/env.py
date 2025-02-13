@@ -38,13 +38,16 @@ logger = logging.getLogger(__name__)
 class DiceBlackJack(gym.Env):
     """Dice Blackjack RL environment implementation."""
 
-    def __init__(self, dealer_th: int = 17, render_mode: str | None = None):
+    def __init__(
+        self, dealer_th: int = 17, render_mode: str | None = None, fps: int = 10
+    ):
         """Initialize the environment."""
         super().__init__()
         self.action_space = gym.spaces.Discrete(6)
         self.observation_space = gym.spaces.MultiDiscrete([25, 7, 7, 2])
         self.dealer = Dealer(self._roll_dice, dealer_th)
         self.render_mode = render_mode
+        self.metadata["render_fps"] = fps
         logger.info("Dice Blackjack environment has been initialized.")
         self.done = True
 
@@ -373,8 +376,8 @@ class DiceBlackJack(gym.Env):
         if self.render_mode == "human":
             pygame.event.pump()  # Process event queue
             pygame.display.flip()
-            # Use the specified render fps (defaulting to 30 if not in metadata)
-            self.clock.tick(self.metadata.get("render_fps", 30))
+            # Use the throttled FPS
+            self.clock.tick(self.metadata.get("render_fps"))
         else:
             # For non-human render mode, return an RGB array of the frame.
             return np.transpose(
@@ -460,18 +463,23 @@ if __name__ == "__main__":
         "Available actions:\n0 - hit first die;   1 - hit second die;   2 - hit sum;\n"
         "3 - stack first die; 4 - stack second die; 5 - stack sum.\nEnter the action: "
     )
-    env = DiceBlackJack(render_mode="human")
+    env = DiceBlackJack(render_mode="rgb")
     state, reward, done = env.reset()
     print(f"Initial state: {state}, reward: {reward}, done: {done}")
+    if env.render_mode != "human":
+        logger.debug("Output array: %s", env.render().shape)
 
     while not done:
         action = int(input(prompt))
         state, reward, done = env.step(action)
         print(f"Action: {action}, State: {state}, Reward: {reward}, Done: {done}")
+        if env.render_mode != "human":
+            logger.debug("Output array: %s", env.render().shape)
 
     # Add a loop to keep the window open until the user closes it.
     if env.render_mode == "human":
         import keyboard
+
         print("Game over. Press Enter to exit.")
         running = True
         while running:
