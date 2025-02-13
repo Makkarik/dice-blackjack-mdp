@@ -36,6 +36,8 @@ target-version = "py312"
 fix = true
 preview = true
 
+exclude = ["__init__.py"]
+
 [tool.ruff.lint]
 select = [
   # McCabe complexity

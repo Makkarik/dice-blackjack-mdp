@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-DEFAULT_STATE = np.array([0, 0, 0, 0], dtype=np.uint8)
+DEFAULT_STATE = np.array([0, 0, 0, True], dtype=np.uint8)
 
 FIRST_DIE, SECOND_DIE, DICE_SUM = 0, 1, 2
 BUST_VALUE = 21
@@ -51,16 +51,22 @@ class DiceBlackJack(gym.Env):
         """Reset the environment."""
         super().reset(seed=seed)
         self.dealer.reset()
+
         self.player_state = DEFAULT_STATE.copy()
-        self.player_score = 0
+        self.player_history = []
+        self._player_min_score = 0
+
         self.dealer_state = DEFAULT_STATE.copy()
-        self.dealer_score = 0
+        self._dealer_min_score = 0
+        self.dealer_history = [np.append(self.dealer_state, None)]
+
         self._chance_for_blackjack = False
         self._blackjack = False
         self.done = False
 
         self.player_state[1:3] = self._roll_dice()
         self._check_blackjack()
+        self.player_history.append(np.append(self.player_state.copy(), DICE_SUM))
         return self._get_observation()
 
     def _roll_dice(self) -> np.ndarray:
@@ -84,7 +90,7 @@ class DiceBlackJack(gym.Env):
             msg = "Environment must be reset before use!"
             raise Exception(msg)
 
-        is_double_score = self.player_state[3] == 0
+        is_double_score = self.player_state[3]
         die_idx = 2 if is_double_score else action % 3
         is_stack = action // 3
 
@@ -96,46 +102,52 @@ class DiceBlackJack(gym.Env):
             dice = self.player_state[1:3]
             dice = np.append(dice, dice.sum())
             if is_double_score:
-                self.player_score = 2 * (self.player_state[0] + dice[die_idx])
+                self.player_state[0] = 2 * dice[die_idx]
             else:
-                self.player_score += dice[die_idx]
+                self.player_state[0] += dice[die_idx]
+            self.player_state[1:3] = 0
             # Engage dealer
-            self.dealer_state, self.dealer_score = self.dealer.play()
+            self.dealer_history, self._dealer_min_score = self.dealer.play()
+            self.dealer_state = self.dealer_history[-1]
             self.done = True
             # Get the observation
             logger.debug("Transition %s -> %s", previous_state, self.player_state)
-            return self._get_observation()
 
         else:
             # Add points to the score
             dice = self.player_state[1:3]
             dice = np.append(dice, dice.sum())
             if is_double_score:
-                self.player_state[0] += 2 * dice[die_idx]
+                self.player_state[0] = 2 * dice[die_idx]
             else:
                 self.player_state[0] += dice[die_idx]
-            self.player_score = self.player_state[0]
-            self.player_state[3] = 1  # It is not the first roll
+            self.player_state[3] = False  # It is not the first roll
             # Roll the dice!
             dice = self._roll_dice()
             self.player_state[1:3] = dice
             # Get the observation
             self._check_blackjack()
             logger.debug("Transition %s -> %s", previous_state, self.player_state)
-            return self._get_observation()
+
+        self.player_history.append(np.append(self.player_state.copy(), action))
+        return self._get_observation()
 
     def _check_blackjack(self) -> None:
         """Check the Blackjack combination."""
+        # If player has rolled double value in a row, he get the Blackjack
         if self.player_state[1] == self.player_state[2] and self._chance_for_blackjack:
             self._blackjack = True
-        elif self.player_state[1] == self.player_state[2]:
+        # If player has rolled double value once, he get the cahnce for Blackjack
+        elif self.player_state[1] == self.player_state[2] and self.player_state[1] > 0:
             self._chance_for_blackjack = True
             self._blackjack = False
+        # Any other case drop both variables
         else:
             self._chance_for_blackjack = False
             self._blackjack = False
 
     def _get_observation(self) -> None:
+        """Get the state of the environment."""
         self._update_players_score()
         reward = self._calculate_reward()
         logger.debug(
@@ -144,60 +156,67 @@ class DiceBlackJack(gym.Env):
             reward,
             self.done,
         )
+        if self.done:
+            logger.debug("Player's rolls: %s",
+                         str(np.stack(self.player_history)).replace("\n", " ->"))
+            logger.debug("Dealer's rolls: %s",
+                         str(np.stack(self.dealer_history)).replace("\n", " ->"))
         return self.player_state, reward, self.done
 
     def _update_players_score(self) -> None:
         """Recalculate the player score if the bust is unavoidable."""
         min_score = 0
-        if not self._chance_for_blackjack and self.player_state[3] > 0:
-            # Enable if there is no chance for Blackjack
+        if not self._chance_for_blackjack and not self.player_state[3]:
             min_score = self.player_state[0] + self.player_state[1:3].min()
-        elif not self._chance_for_blackjack and self.player_state[3] == 0:
+        elif not self._chance_for_blackjack and self.player_state[3]:
             min_score = 2 * self.player_state[1:3].sum()
 
         if min_score > BUST_VALUE:
-            self.player_score = min_score
+            self._player_min_score = min_score
+            self.done = True
+        else:
+            self._player_min_score = self.player_state[0]
 
     def _calculate_reward(self) -> int:
         """Reward function implementation."""
         if self._blackjack:
             self.done = True
-            logger.debug(
-                "Game ended with the Blackjack combination!"
-            )
+            logger.debug("Game ended with the Blackjack combination!")
             return 1  # Ultimate victory
-        elif self.dealer_score > BUST_VALUE:
+        elif self._dealer_min_score > BUST_VALUE:
             logger.debug(
-                "Game ended with the dealer's bust of score %02d", self.dealer_score
+                "Game ended with the dealer's bust of score %02d",
+                self._dealer_min_score,
             )
             self.done = True
             return 1  # Dealer's bust
-        elif self.player_score > BUST_VALUE:
+        elif self._player_min_score > BUST_VALUE:
             logger.debug(
-                "Game ended with the player's bust of score %02d", self.player_score
+                "Game ended with the player's bust of score %02d",
+                self._player_min_score,
             )
             self.done = True
             return -1  # Bust lose
-        elif self.player_score > self.dealer_score and self.done:
+        elif self._player_min_score > self._dealer_min_score and self.done:
             logger.debug(
                 "Game ended with the player's victory: %02d > %02d",
-                self.player_score,
-                self.dealer_score,
+                self._player_min_score,
+                self._dealer_min_score,
             )
             return 1  # Player's victory
-        elif self.player_score < self.dealer_score and self.done:
+        elif self._player_min_score < self._dealer_min_score and self.done:
             logger.debug(
                 "Game ended with the dealer's victory: %02d < %02d",
-                self.player_score,
-                self.dealer_score,
+                self._player_min_score,
+                self._dealer_min_score,
             )
             self.done = True
             return -1  # Score lose
-        elif self.player_score == self.dealer_score and self.done:
+        elif self._player_min_score == self._dealer_min_score and self.done:
             logger.debug(
                 "Game ended with the draw: %02d = %02d",
-                self.player_score,
-                self.dealer_score,
+                self._player_min_score,
+                self._dealer_min_score,
             )
             return 0  # Draw
         else:
@@ -222,9 +241,7 @@ class DiceBlackJack(gym.Env):
             # Die background
             left = center_x - size // 2
             top = center_y - size // 2
-            pygame.draw.rect(
-                screen, WHITE, (left, top, size, size), border_radius=10
-            )
+            pygame.draw.rect(screen, WHITE, (left, top, size, size), border_radius=10)
             pygame.draw.rect(
                 screen, BLACK, (left, top, size, size), 2, border_radius=10
             )
@@ -232,7 +249,7 @@ class DiceBlackJack(gym.Env):
             # Draw pips
             if value is None:
                 # Draw a question mark in the center
-                font = pygame.font.SysFont(None, size)
+                font = pygame.font.Font("./src/assets/Grand9K Pixel.ttf", size)
                 text_surface = font.render("?", True, BLACK)
                 tx = center_x - text_surface.get_width() // 2
                 ty = center_y - text_surface.get_height() // 2
@@ -289,15 +306,35 @@ class DiceBlackJack(gym.Env):
 
             # Draw the four dice
             # Dealer dice on top
-            draw_die(screen, window_width // 2 - 100, window_height // 2 - 75,
-                     self.dealer_state[1], size=100)
-            draw_die(screen, window_width // 2 + 100, window_height // 2 - 75,
-                     self.dealer_state[2], size=100)
+            draw_die(
+                screen,
+                window_width // 2 - 100,
+                window_height // 2 - 75,
+                self.dealer_state[1],
+                size=100,
+            )
+            draw_die(
+                screen,
+                window_width // 2 + 100,
+                window_height // 2 - 75,
+                self.dealer_state[2],
+                size=100,
+            )
             # Player dice on bottom
-            draw_die(screen, window_width // 2 - 100, window_height // 2 + 75,
-                     self.player_state[1], size=100)
-            draw_die(screen, window_width // 2 + 100, window_height // 2 + 75,
-                     self.player_state[2], size=100)
+            draw_die(
+                screen,
+                window_width // 2 - 100,
+                window_height // 2 + 75,
+                self.player_state[1],
+                size=100,
+            )
+            draw_die(
+                screen,
+                window_width // 2 + 100,
+                window_height // 2 + 75,
+                self.player_state[2],
+                size=100,
+            )
             # Line between player and dealer
             pygame.draw.line(
                 screen,
@@ -339,6 +376,7 @@ class Dealer:
         self._roll_generator = roll_generator
         self._threshold = threshold
         self._state = DEFAULT_STATE.copy()
+        self._state_history = []
         self.reset()
 
     def play(self) -> int:
@@ -353,10 +391,12 @@ class Dealer:
         if self._roll > 0:
             msg = "Dealer must be reset before next play."
             raise Exception(msg)
+
         dice = self._roll_generator()
-        self._roll = 1
+        self._roll = 0
         self.total_score = 2 * dice.sum()  # First roll
         self._state[1:3] = dice
+        self._state_history.append(np.append(self._state, DICE_SUM))
 
         while self.total_score < self._threshold:
             self._state[0] = self.total_score
@@ -366,8 +406,13 @@ class Dealer:
             self._state[1:3] = dice
             # If the roll is not first, change the value
             self._roll += 1
-        self._state[3] = int(self._roll > 1)
-        return self._state, self.total_score
+            self._state_history.append(np.append(self._state, DICE_SUM))
+        self._state[3] = int(self._roll == 0)
+        if self.total_score <= BUST_VALUE:
+            self._state[0] = self.total_score
+            self._state[1:3] = 0
+            self._state_history.append(np.append(self._state, DICE_SUM))
+        return self._state_history, self.total_score
 
     def reset(self):
         """Reset the dealer's internal state."""
@@ -376,12 +421,9 @@ class Dealer:
 
 
 if __name__ == "__main__":
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.DEBUG)
-    std_format = logging.Formatter("[%(levelname)s] %(message)s")
-    stream_handler.setFormatter(std_format)
-
-    logging.basicConfig(level=logging.DEBUG, handlers=[stream_handler])
+    import sys
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout,
+                        format="[%(levelname)s] %(message)s")
     logging.logProcesses = False
 
     prompt = (
