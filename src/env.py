@@ -1,7 +1,9 @@
 """Module for DiceBlackJack environment and associated Dealer class."""
 
 import logging
+import os
 from collections.abc import Callable
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -12,25 +14,7 @@ DEFAULT_STATE = np.array([0, 0, 0, True], dtype=np.uint8)
 FIRST_DIE, SECOND_DIE, DICE_SUM = 0, 1, 2
 BUST_VALUE = 21
 
-DICE_PIPS = {
-    1: [(0.5, 0.5)],
-    2: [(0.25, 0.25), (0.75, 0.75)],
-    3: [(0.25, 0.25), (0.5, 0.5), (0.75, 0.75)],
-    4: [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)],
-    5: [(0.25, 0.25), (0.75, 0.25), (0.5, 0.5), (0.25, 0.75), (0.75, 0.75)],
-    6: [
-        (0.25, 0.25),
-        (0.75, 0.25),
-        (0.25, 0.5),
-        (0.75, 0.5),
-        (0.25, 0.75),
-        (0.75, 0.75),
-    ],
-}
-
-GREEN = (50, 150, 50)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
+WHITE = (253, 253, 253)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +32,10 @@ class DiceBlackJack(gym.Env):
         self.dealer = Dealer(self._roll_dice, dealer_th)
         self.render_mode = render_mode
         self.metadata["render_fps"] = fps
-        logger.info("Dice Blackjack environment has been initialized.")
         self.done = True
+
+        self._cwd = os.path.dirname(__file__)
+        logger.info("Dice Blackjack environment has been initialized.")
 
     def reset(self, seed: int | None = None) -> tuple[np.ndarray, int, bool]:
         """Reset the environment."""
@@ -133,7 +119,9 @@ class DiceBlackJack(gym.Env):
             self._check_blackjack()
             logger.debug("Transition %s -> %s", previous_state, self.player_state)
 
-        self.player_history.append(np.append(self.player_state.copy(), action))
+        self.player_history.append(np.append(self.player_state.copy(), None))
+        if not self.player_history[-2][-2]:
+            self.player_history[-2][-1] = action
         return self._get_observation()
 
     def _check_blackjack(self) -> None:
@@ -249,7 +237,7 @@ class DiceBlackJack(gym.Env):
             return
 
         # Window dimensions
-        window_width, window_height = 600, 400
+        window_width, window_height = 920, 690
 
         # Initialize the display/screen if not already done
         if not hasattr(self, "screen"):
@@ -266,111 +254,21 @@ class DiceBlackJack(gym.Env):
         if not hasattr(self, "clock"):
             self.clock = pygame.time.Clock()
 
-        # Fill the background
-        self.screen.fill(GREEN)
-
-        # --- Helper function to draw a single die ---
-        def draw_die(surface, center_x, center_y, value, size=100):
-            """Draw a single die on the given surface."""
-            # Compute the top-left coordinates of the die's rectangle
-            left = center_x - size // 2
-            top = center_y - size // 2
-            # Draw die background with rounded corners
-            pygame.draw.rect(surface, WHITE, (left, top, size, size), border_radius=10)
-            pygame.draw.rect(
-                surface, BLACK, (left, top, size, size), 2, border_radius=10
-            )
-
-            if value is None:
-                # Draw a question mark if value is missing
-                font = pygame.font.SysFont(None, size)
-                text_surface = font.render("?", True, BLACK)
-                tx = center_x - text_surface.get_width() // 2
-                ty = center_y - text_surface.get_height() // 2
-                surface.blit(text_surface, (tx, ty))
-            else:
-                # Draw the pips based on the provided mapping in DICE_PIPS
-                pip_radius = size // 10
-                if value not in DICE_PIPS:
-                    return  # Guard against an invalid dice value
-                for fx, fy in DICE_PIPS[value]:
-                    px = left + int(fx * size)
-                    py = top + int(fy * size)
-                    pygame.draw.circle(surface, BLACK, (px, py), pip_radius)
-
-        # --- Rendering text and dice layout ---
-        # Define a font (you may choose a different size or font file)
-        font = pygame.font.Font(None, 48)
-
-        # Render and position dealer and player labels
-        dealer_text = font.render("Dealer", True, WHITE)
-        player_text = font.render("Player", True, WHITE)
-        self.screen.blit(
-            dealer_text, (window_width // 2 - dealer_text.get_width() // 2, 10)
-        )
-        self.screen.blit(
-            player_text,
-            (window_width // 2 - player_text.get_width() // 2, window_height - 50),
+        # Place the image to background
+        background = pygame.image.load(os.path.join(self._cwd, "assets/background.png"))
+        self.screen.blit(background, (0, 0))
+        # Get the font
+        self._font = pygame.font.Font(
+            os.path.join(self._cwd, "assets/Grand9K_Pixel.ttf"), 48
         )
 
-        # Compute and render dice sums (assumes self.dealer_state and self.player_state
-        # are sequences)
-        dealer_sum_value = sum(self.dealer_state[1:3])
-        player_sum_value = sum(self.player_state[1:3])
-        dealer_sum = font.render(f"{dealer_sum_value:02d}", True, WHITE)
-        player_sum = font.render(f"{player_sum_value:02d}", True, WHITE)
-        self.screen.blit(dealer_sum, (window_width // 2 - 18, 110))
-        self.screen.blit(player_sum, (window_width // 2 - 18, window_height - 140))
+        player_history = truncate_list(self.player_history)
+        for i, roll in enumerate(player_history):
+            self._draw_roll(self.screen, 139 + 120 * i, 360, roll)
 
-        # Render scores (assumes the first element holds the current score)
-        score_text = font.render("Score:", True, WHITE)
-        dealer_score = font.render(f"{self.dealer_state[0]}", True, WHITE)
-        player_score = font.render(f"{self.player_state[0]}", True, WHITE)
-        self.screen.blit(score_text, (15, 20))
-        self.screen.blit(dealer_score, (55, 55))
-        self.screen.blit(score_text, (15, window_height - 90))
-        self.screen.blit(player_score, (55, window_height - 55))
-
-        # Draw the four dice:
-        # Dealer's dice (top row)
-        draw_die(
-            self.screen,
-            window_width // 2 - 100,
-            window_height // 2 - 75,
-            self.dealer_state[1],
-            size=100,
-        )
-        draw_die(
-            self.screen,
-            window_width // 2 + 100,
-            window_height // 2 - 75,
-            self.dealer_state[2],
-            size=100,
-        )
-        # Player's dice (bottom row)
-        draw_die(
-            self.screen,
-            window_width // 2 - 100,
-            window_height // 2 + 75,
-            self.player_state[1],
-            size=100,
-        )
-        draw_die(
-            self.screen,
-            window_width // 2 + 100,
-            window_height // 2 + 75,
-            self.player_state[2],
-            size=100,
-        )
-
-        # Draw a dividing line between dealer and player areas
-        pygame.draw.line(
-            self.screen,
-            (255, 0, 0),
-            (0, window_height // 2),
-            (window_width, window_height // 2),
-            10,
-        )
+        dealer_history = truncate_list(self.dealer_history)
+        for i, roll in enumerate(dealer_history):
+            self._draw_roll(self.screen, 139 + 120 * i, 36, roll)
 
         # --- Finalize the frame based on render mode ---
         if self.render_mode == "human":
@@ -383,6 +281,32 @@ class DiceBlackJack(gym.Env):
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
+
+    def _draw_roll(
+        self, surface: pygame.Surface, left: int, top: int, state: np.ndarray
+    ):
+        """Draw a single roll on the given surface."""
+        score = self._font.render(f"{state[0]:02d}", True, WHITE)
+        score_rect = score.get_rect(center=(left + 60, top + 30))
+        surface.blit(score, score_rect)
+
+        selection = pygame.image.load(os.path.join(self._cwd, "assets/select.png"))
+        if state[4] and state[4] % 3 in {0, 2}:
+            surface.blit(selection, (left + 6, top + 78))
+        if state[4] and state[4] % 3 in {1, 2}:
+            surface.blit(selection, (left + 6, top + 78 + 108))
+
+        for i, die in enumerate(state[1:3]):
+            die = pygame.image.load(os.path.join(self._cwd, f"assets/die_{die}.png"))
+            surface.blit(die, (left + 12, top + 84 + (108 * i)))
+
+
+def truncate_list(history: list[Any], n: int = 6) -> list[Any]:
+    """Truncate the list to last n elements."""
+    if len(history) > n:
+        return history[-n:]
+    else:
+        return history
 
 
 class Dealer:
@@ -442,7 +366,7 @@ class Dealer:
         if self.total_score <= BUST_VALUE:
             self._state[0] = self.total_score
             self._state[1:3] = 0
-            self._state_history.append(np.append(self._state, DICE_SUM))
+            self._state_history.append(np.append(self._state, None))
         return self._state_history, self.total_score
 
     def reset(self):
@@ -463,16 +387,18 @@ if __name__ == "__main__":
         "Available actions:\n0 - hit first die;   1 - hit second die;   2 - hit sum;\n"
         "3 - stack first die; 4 - stack second die; 5 - stack sum.\nEnter the action: "
     )
-    env = DiceBlackJack(render_mode="rgb")
+    env = DiceBlackJack(render_mode="human")
     state, reward, done = env.reset()
-    print(f"Initial state: {state}, reward: {reward}, done: {done}")
+    logger.info("Initial state: %s, reward: %s, done: %s", state, reward, done)
     if env.render_mode != "human":
         logger.debug("Output array: %s", env.render().shape)
 
     while not done:
         action = int(input(prompt))
         state, reward, done = env.step(action)
-        print(f"Action: {action}, State: {state}, Reward: {reward}, Done: {done}")
+        logger.info(
+            "Action: %s, State: %s, Reward: %s, Done: %s", action, state, reward, done
+        )
         if env.render_mode != "human":
             logger.debug("Output array: %s", env.render().shape)
 
@@ -480,7 +406,7 @@ if __name__ == "__main__":
     if env.render_mode == "human":
         import keyboard
 
-        print("Game over. Press Enter to exit.")
+        logger.info("Game over. Press Enter to exit.")
         running = True
         while running:
             for event in pygame.event.get():
