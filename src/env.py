@@ -38,12 +38,13 @@ logger = logging.getLogger(__name__)
 class DiceBlackJack(gym.Env):
     """Dice Blackjack RL environment implementation."""
 
-    def __init__(self, dealer_th: int = 17):
+    def __init__(self, dealer_th: int = 17, render_mode: str | None = None):
         """Initialize the environment."""
         super().__init__()
         self.action_space = gym.spaces.Discrete(6)
         self.observation_space = gym.spaces.MultiDiscrete([25, 7, 7, 2])
         self.dealer = Dealer(self._roll_dice, dealer_th)
+        self.render_mode = render_mode
         logger.info("Dice Blackjack environment has been initialized.")
         self.done = True
 
@@ -157,10 +158,17 @@ class DiceBlackJack(gym.Env):
             self.done,
         )
         if self.done:
-            logger.debug("Player's rolls: %s",
-                         str(np.stack(self.player_history)).replace("\n", " ->"))
-            logger.debug("Dealer's rolls: %s",
-                         str(np.stack(self.dealer_history)).replace("\n", " ->"))
+            logger.debug(
+                "Player's rolls: %s",
+                str(np.stack(self.player_history)).replace("\n", " ->"),
+            )
+            logger.debug(
+                "Dealer's rolls: %s",
+                str(np.stack(self.dealer_history)).replace("\n", " ->"),
+            )
+        # Human-readable option enables default rendering
+        if self.render_mode == "human":
+            self.render()
         return self.player_state, reward, self.done
 
     def _update_players_score(self) -> None:
@@ -223,135 +231,155 @@ class DiceBlackJack(gym.Env):
             return 0  # Intermediate state
 
     def render(self):
-        """Render the Environment."""
-        pygame.init()
+        """Render the environment.
 
-        # Window size
+        If `self.render_mode == "human"`, update the pygame display.
+        Otherwise, return an RGB array representing the current frame.
+        """
+        if self.render_mode is None:
+            # Warn if render mode is not set
+            logger.warning(
+                "You are calling render() without specifying a render mode. "
+                "You can specify it at initialization, e.g. "
+                'DiceBlackjack(render_mode="rgb_array")'
+            )
+            return
+
+        # Window dimensions
         window_width, window_height = 600, 400
-        screen = pygame.display.set_mode((window_width, window_height))
-        pygame.display.set_caption("Dice Blackjack")
 
-        def draw_die(screen, center_x, center_y, value, size=100):
-            """Draw the dice.
+        # Initialize the display/screen if not already done
+        if not hasattr(self, "screen"):
+            pygame.init()
+            if self.render_mode == "human":
+                pygame.display.init()
+                self.screen = pygame.display.set_mode((window_width, window_height))
+                pygame.display.set_caption("Dice Blackjack")
+            else:
+                pygame.font.init()
+                self.screen = pygame.Surface((window_width, window_height))
 
-            Draws a single die at the given center (center_x, center_y)
-            with a specified side size, labeled with 'value' (1..6).
+        # Initialize the clock if not already done (for human mode fps control)
+        if not hasattr(self, "clock"):
+            self.clock = pygame.time.Clock()
 
-            """
-            # Die background
+        # Fill the background
+        self.screen.fill(GREEN)
+
+        # --- Helper function to draw a single die ---
+        def draw_die(surface, center_x, center_y, value, size=100):
+            """Draw a single die on the given surface."""
+            # Compute the top-left coordinates of the die's rectangle
             left = center_x - size // 2
             top = center_y - size // 2
-            pygame.draw.rect(screen, WHITE, (left, top, size, size), border_radius=10)
+            # Draw die background with rounded corners
+            pygame.draw.rect(surface, WHITE, (left, top, size, size), border_radius=10)
             pygame.draw.rect(
-                screen, BLACK, (left, top, size, size), 2, border_radius=10
+                surface, BLACK, (left, top, size, size), 2, border_radius=10
             )
 
-            # Draw pips
             if value is None:
-                # Draw a question mark in the center
-                font = pygame.font.Font("./src/assets/Grand9K Pixel.ttf", size)
+                # Draw a question mark if value is missing
+                font = pygame.font.SysFont(None, size)
                 text_surface = font.render("?", True, BLACK)
                 tx = center_x - text_surface.get_width() // 2
                 ty = center_y - text_surface.get_height() // 2
-                screen.blit(text_surface, (tx, ty))
+                surface.blit(text_surface, (tx, ty))
             else:
-                # Each pip is a small circle. We'll compute its position relative to the
-                # die's rectangle
+                # Draw the pips based on the provided mapping in DICE_PIPS
                 pip_radius = size // 10
                 if value not in DICE_PIPS:
-                    return  # Guard against invalid dice value
+                    return  # Guard against an invalid dice value
                 for fx, fy in DICE_PIPS[value]:
                     px = left + int(fx * size)
                     py = top + int(fy * size)
-                    pygame.draw.circle(screen, BLACK, (px, py), pip_radius)
+                    pygame.draw.circle(surface, BLACK, (px, py), pip_radius)
 
-        # Basic layout: 2 dice for the dealer on top row, 2 dice for the player on
-        # bottom row.
-        # We'll place them in the center horizontally, spaced horizontally as well.
-        # For example, top row y=100, bottom row y=300, and x positions around 200 & 400
-        # Adjust as needed.
+        # --- Rendering text and dice layout ---
+        # Define a font (you may choose a different size or font file)
+        font = pygame.font.Font(None, 48)
 
-        running = True
-        while running:
-            screen.fill(GREEN)  # Greenish background
+        # Render and position dealer and player labels
+        dealer_text = font.render("Dealer", True, WHITE)
+        player_text = font.render("Player", True, WHITE)
+        self.screen.blit(
+            dealer_text, (window_width // 2 - dealer_text.get_width() // 2, 10)
+        )
+        self.screen.blit(
+            player_text,
+            (window_width // 2 - player_text.get_width() // 2, window_height - 50),
+        )
 
-            # Define font
-            font = pygame.font.Font(None, 48)
+        # Compute and render dice sums (assumes self.dealer_state and self.player_state
+        # are sequences)
+        dealer_sum_value = sum(self.dealer_state[1:3])
+        player_sum_value = sum(self.player_state[1:3])
+        dealer_sum = font.render(f"{dealer_sum_value:02d}", True, WHITE)
+        player_sum = font.render(f"{player_sum_value:02d}", True, WHITE)
+        self.screen.blit(dealer_sum, (window_width // 2 - 18, 110))
+        self.screen.blit(player_sum, (window_width // 2 - 18, window_height - 140))
 
-            # Title text (optional)
-            dealer_text = font.render("Dealer", True, WHITE)
-            player_text = font.render("Player", True, WHITE)
-            screen.blit(
-                dealer_text, (window_width // 2 - dealer_text.get_width() // 2, 10)
-            )
-            screen.blit(
-                player_text,
-                (window_width // 2 - player_text.get_width() // 2, window_height - 50),
-            )
+        # Render scores (assumes the first element holds the current score)
+        score_text = font.render("Score:", True, WHITE)
+        dealer_score = font.render(f"{self.dealer_state[0]}", True, WHITE)
+        player_score = font.render(f"{self.player_state[0]}", True, WHITE)
+        self.screen.blit(score_text, (15, 20))
+        self.screen.blit(dealer_score, (55, 55))
+        self.screen.blit(score_text, (15, window_height - 90))
+        self.screen.blit(player_score, (55, window_height - 55))
 
-            # Write total sum
-            dealer_sum = font.render(f"{self.dealer_state[1:3].sum():02d}", True, WHITE)
-            player_sum = font.render(f"{self.player_state[1:3].sum():02d}", True, WHITE)
-            screen.blit(dealer_sum, (window_width // 2 - 18, 110))
-            screen.blit(player_sum, (window_width // 2 - 18, window_height - 140))
+        # Draw the four dice:
+        # Dealer's dice (top row)
+        draw_die(
+            self.screen,
+            window_width // 2 - 100,
+            window_height // 2 - 75,
+            self.dealer_state[1],
+            size=100,
+        )
+        draw_die(
+            self.screen,
+            window_width // 2 + 100,
+            window_height // 2 - 75,
+            self.dealer_state[2],
+            size=100,
+        )
+        # Player's dice (bottom row)
+        draw_die(
+            self.screen,
+            window_width // 2 - 100,
+            window_height // 2 + 75,
+            self.player_state[1],
+            size=100,
+        )
+        draw_die(
+            self.screen,
+            window_width // 2 + 100,
+            window_height // 2 + 75,
+            self.player_state[2],
+            size=100,
+        )
 
-            # Wrire current score
-            score_text = font.render("Score:", True, WHITE)
-            dealer_score = font.render(f"{self.dealer_state[0]}", True, WHITE)
-            player_score = font.render(f"{self.player_state[0]}", True, WHITE)
-            screen.blit(score_text, (15, 20))
-            screen.blit(dealer_score, (55, 55))
-            screen.blit(score_text, (15, window_height - 90))
-            screen.blit(player_score, (55, window_height - 55))
+        # Draw a dividing line between dealer and player areas
+        pygame.draw.line(
+            self.screen,
+            (255, 0, 0),
+            (0, window_height // 2),
+            (window_width, window_height // 2),
+            10,
+        )
 
-            # Draw the four dice
-            # Dealer dice on top
-            draw_die(
-                screen,
-                window_width // 2 - 100,
-                window_height // 2 - 75,
-                self.dealer_state[1],
-                size=100,
-            )
-            draw_die(
-                screen,
-                window_width // 2 + 100,
-                window_height // 2 - 75,
-                self.dealer_state[2],
-                size=100,
-            )
-            # Player dice on bottom
-            draw_die(
-                screen,
-                window_width // 2 - 100,
-                window_height // 2 + 75,
-                self.player_state[1],
-                size=100,
-            )
-            draw_die(
-                screen,
-                window_width // 2 + 100,
-                window_height // 2 + 75,
-                self.player_state[2],
-                size=100,
-            )
-            # Line between player and dealer
-            pygame.draw.line(
-                screen,
-                (255, 0, 0),
-                (0, window_height // 2),
-                (window_width, window_height // 2),
-                10,
-            )
-
+        # --- Finalize the frame based on render mode ---
+        if self.render_mode == "human":
+            pygame.event.pump()  # Process event queue
             pygame.display.flip()
-
-            # Wait for quit
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-
-        pygame.quit()
+            # Use the specified render fps (defaulting to 30 if not in metadata)
+            self.clock.tick(self.metadata.get("render_fps", 30))
+        else:
+            # For non-human render mode, return an RGB array of the frame.
+            return np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+            )
 
 
 class Dealer:
@@ -422,21 +450,34 @@ class Dealer:
 
 if __name__ == "__main__":
     import sys
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout,
-                        format="[%(levelname)s] %(message)s")
+
+    logging.basicConfig(
+        level=logging.DEBUG, stream=sys.stdout, format="[%(levelname)s] %(message)s"
+    )
     logging.logProcesses = False
 
     prompt = (
         "Available actions:\n0 - hit first die;   1 - hit second die;   2 - hit sum;\n"
         "3 - stack first die; 4 - stack second die; 5 - stack sum.\nEnter the action: "
     )
-    env = DiceBlackJack()
+    env = DiceBlackJack(render_mode="human")
     state, reward, done = env.reset()
     print(f"Initial state: {state}, reward: {reward}, done: {done}")
-    env.render()
 
     while not done:
         action = int(input(prompt))
         state, reward, done = env.step(action)
         print(f"Action: {action}, State: {state}, Reward: {reward}, Done: {done}")
-        env.render()
+
+    # Add a loop to keep the window open until the user closes it.
+    if env.render_mode == "human":
+        import keyboard
+        print("Game over. Press Enter to exit.")
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            if keyboard.is_pressed("enter"):
+                running = False
+    pygame.quit()
