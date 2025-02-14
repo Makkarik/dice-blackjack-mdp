@@ -330,8 +330,6 @@ class Dealer:
         """Init dealer."""
         self._roll_generator = roll_generator
         self._threshold = threshold
-        self._state = DEFAULT_STATE.copy()
-        self._state_history = []
         self.reset()
 
     def play(self) -> int:
@@ -372,9 +370,11 @@ class Dealer:
     def reset(self):
         """Reset the dealer's internal state."""
         self._state = DEFAULT_STATE.copy()
+        self._state_history = []
         self._roll = 0
 
 
+# Test snippet for the environment
 if __name__ == "__main__":
     import sys
 

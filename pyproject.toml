@@ -22,6 +22,7 @@ numpy = "^2.2.2"
 pygame = "^2.6.1"
 gymnasium = "^1.0.0"
 ipykernel = "^6.29.5"
+tqdm = "^4.67.1"
 
 [tool.poetry.dev-dependencies]
 pre-commit = "^4.1.0"
