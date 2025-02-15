@@ -45,8 +45,7 @@ class QLearningAgent:
     def __init__(
         self,
         env,
-        learning_rate: float,
-        discount_factor: float = 0.95,
+        n_episodes: int,
         seed: int | None = None,
     ):
         """Initialize an RL agent, utilizing the Q-Learning.
@@ -55,19 +54,15 @@ class QLearningAgent:
         ----------
         env : gymnasium.Env
             The agent's environmet.
-        learning_rate : float
-            The learning rate
-        discount_factor : float = 0.95
-            The discount factor for computing the Q-value
+        n_episodes : int
+            The number of episodes for training.
         seed : int | None = None
             The seed for internal random generator.
 
         """
-        self.lr = learning_rate
-        self.gamma = discount_factor
-
-        self.seed = seed
         self.env = env
+        self.n_episodes = n_episodes
+        self.seed = seed
         self.reset()
 
     def reset(self) -> None:
@@ -137,7 +132,8 @@ class QLearningAgent:
 
     def train(
         self,
-        n_episodes: int,
+        learning_rate: float,
+        discount_factor: float = 0.95,
         epsilon_decay: Callable[[float], float] | None = None,
         progress: bool = True,
     ) -> list[float]:
@@ -145,10 +141,10 @@ class QLearningAgent:
 
         Parameters
         ----------
-        n_episodes : int
-            The total number of episodes.
         learning_rate : float
             The learning rate for the training.
+        discount_factor : float = 0.95
+            The discount factor for computing the Q-value
         epsilon_decay: Callable | None = None
             A function, that map training progress [0, 1) to the epsilon value [0, 1].
         progress : bool = True
@@ -160,15 +156,18 @@ class QLearningAgent:
             List of the training errors.
 
         """
+        self.lr = learning_rate
+        self.gamma = discount_factor
+
         if epsilon_decay is None:
             epsilon_decay = lambda x: max(1 - x, 1e-3)
 
-        for episode in trange(n_episodes, desc="Training", disable=not progress):
+        for episode in trange(self.n_episodes, desc="Training", disable=not progress):
             # Initialize the environment with the pseudorandom value
             obs, _ = self.env.reset(
                 seed=int(self.random_generator.integers(0, 2**32 - 1))
             )
-            self._epsilon = epsilon_decay(episode / n_episodes)
+            self._epsilon = epsilon_decay(episode / self.n_episodes)
             done = False
 
             # Play one episode
