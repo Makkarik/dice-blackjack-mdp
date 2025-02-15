@@ -94,12 +94,47 @@ logger = logging.getLogger(__name__)
 
 
 class DiceBlackJack(gym.Env):
-    """Dice Blackjack RL environment implementation."""
+    """Dice Blackjack RL environment implementation.
+
+    Attributes
+    ----------
+    action_space : gymnasium.spaces.Discrete
+        The size of the action space.
+    observation_space : gymnasium.spaces.MultiDiscrete
+        The size of the observation space.
+    dealer : Dealer
+        The instance of the dealer, used by the environment to play against the player.
+    done : bool
+        A flag, indicating either the game has been ended or not.
+
+    Methods
+    -------
+    reset(seed: int | None = None) -> tuple[tuple, dict[str, Any]]
+        The method for resetting the environment. Must be called each time the "done"
+        flag has been raised.
+    step(self, action: int) -> tuple[tuple, float, bool, bool, dict[str, Any]]
+        The method for making a step with the chosem action. The action must be from the
+        action_space
+    render() -> None
+        A method to render the current state of the environment.
+
+    """
 
     def __init__(
         self, dealer_th: int = 17, render_mode: str | None = None, fps: int = 10
     ):
-        """Initialize the environment."""
+        """Initialize the environment.
+
+        Parameters
+        ----------
+        dealer_th : int = 17
+            The threshold, until which the dealer must roll the scores.
+        render_mode : str | None = None
+            The render mode. Can be either "human" or "rgb_array".
+        fps : int = 10
+            Frame per second limitaion for the rendering option.
+
+        """
         super().__init__()
         self.action_space = gym.spaces.Discrete(6)
         self.observation_space = gym.spaces.MultiDiscrete([25, 7, 7, 2])
@@ -115,27 +150,41 @@ class DiceBlackJack(gym.Env):
     def reset(
         self, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[tuple, dict[str, Any]]:
-        """Reset the environment."""
+        """Reset the environment.
+
+        Parameters
+        ----------
+        seed : int | None = None
+            A seed for the internal random generator.
+        options : dict[str, Any] | None = None
+            A parameter, utilized by the wrappers and other utilities.
+
+        Returns
+        -------
+        observation, info : tuple[tuple, dict[str, Any]]
+            The initial observation after the reset with the auxilary information.
+
+        """
         super().reset(seed=seed, options=options)
         self.dealer.reset()
 
-        self.player_state = DEFAULT_STATE.copy()
-        self.player_history = []
+        self._player_state = DEFAULT_STATE.copy()
+        self._player_history = []
         self._player_min_score = 0
 
-        self.dealer_state = DEFAULT_STATE.copy()
+        self._dealer_state = DEFAULT_STATE.copy()
         self._dealer_min_score = 0
-        self.dealer_history = [np.append(self.dealer_state.copy(), None)]
+        self._dealer_history = [np.append(self._dealer_state.copy(), None)]
 
         self._chance = False
         self._blackjack = False
         self.done = False
 
-        self.player_state[1:3] = self._roll_dice()
+        self._player_state[1:3] = self._roll_dice()
         # Check if the double value has been rolled
-        if self.player_state[1] == self.player_state[2]:
+        if self._player_state[1] == self._player_state[2]:
             self._chance = True
-        self.player_history.append(np.append(self.player_state.copy(), None))
+        self._player_history.append(np.append(self._player_state.copy(), None))
         return self._get_observation(), {}
 
     def _roll_dice(self) -> np.ndarray:
@@ -171,49 +220,49 @@ class DiceBlackJack(gym.Env):
             msg = "Environment must be reset before use!"
             raise Exception(msg)
 
-        self._player_min_score = self._get_player_score(self.player_state)
+        self._player_min_score = self._get_player_score(self._player_state)
         if self._player_min_score > BUST_VALUE:
             self.done = True
 
         else:
-            is_double_score = self.player_state[3]
+            is_double_score = self._player_state[3]
             # If the first roll, map actions to choosing the sum of dice
             action = 3 * (action // 3) + 2 if is_double_score else action
             die_idx = action % 3
             is_stack = action // 3
 
             # Record state for debug purpose
-            previous_state = self.player_state.copy()
+            previous_state = self._player_state.copy()
 
             if is_stack:
                 # Add points to the score
-                dice = self.player_state[1:3]
+                dice = self._player_state[1:3]
                 dice = np.append(dice, dice.sum())
                 self._chance = False
                 if is_double_score:
-                    self.player_state[0] = 2 * dice[die_idx]
-                    self.player_state[3] = False
+                    self._player_state[0] = 2 * dice[die_idx]
+                    self._player_state[3] = False
                 else:
-                    self.player_state[0] += dice[die_idx]
-                self.player_state[1:3] = 0
-                self._player_min_score = self._get_player_score(self.player_state)
+                    self._player_state[0] += dice[die_idx]
+                self._player_state[1:3] = 0
+                self._player_min_score = self._get_player_score(self._player_state)
                 if self._player_min_score <= BUST_VALUE:
                     # Engage dealer
-                    self.dealer_history, self._dealer_min_score = self.dealer.play()
-                    self.dealer_state = self.dealer_history[-1][:-1]
+                    self._dealer_history, self._dealer_min_score = self.dealer.play()
+                    self._dealer_state = self._dealer_history[-1][:-1]
                 self.done = True
                 # Get the observation
-                logger.debug("Transition %s -> %s", previous_state, self.player_state)
+                logger.debug("Transition %s -> %s", previous_state, self._player_state)
 
             else:
                 # Add points to the score
-                dice = self.player_state[1:3]
+                dice = self._player_state[1:3]
                 dice = np.append(dice, dice.sum())
                 if is_double_score:
-                    self.player_state[0] = 2 * dice[die_idx]
-                    self.player_state[3] = False
+                    self._player_state[0] = 2 * dice[die_idx]
+                    self._player_state[3] = False
                 else:
-                    self.player_state[0] += dice[die_idx]
+                    self._player_state[0] += dice[die_idx]
                 # Roll the dice!
                 dice = self._roll_dice()
                 # Check the blackjack
@@ -222,17 +271,17 @@ class DiceBlackJack(gym.Env):
                 else:
                     self._chance = False
                     self._blackjack = False
-                self.player_state[1:3] = dice
-                self._player_min_score = self._get_player_score(self.player_state)
-                logger.debug("Transition %s -> %s", previous_state, self.player_state)
+                self._player_state[1:3] = dice
+                self._player_min_score = self._get_player_score(self._player_state)
+                logger.debug("Transition %s -> %s", previous_state, self._player_state)
             # Write action to the previous state
-            self.player_history[-1][-1] = int(action)
-            self.player_history.append(np.append(self.player_state.copy(), None))
+            self._player_history[-1][-1] = int(action)
+            self._player_history.append(np.append(self._player_state.copy(), None))
 
         reward = self._calculate_reward()
         logger.debug(
             "State: %s, reward: %d, is done: %s",
-            str(self.player_state),
+            str(self._player_state),
             reward,
             self.done,
         )
@@ -250,16 +299,16 @@ class DiceBlackJack(gym.Env):
         if self.done:
             logger.info(
                 "Player's rolls: %s",
-                str(np.stack(self.player_history)).replace("\n", " ->"),
+                str(np.stack(self._player_history)).replace("\n", " ->"),
             )
             logger.info(
                 "Dealer's rolls: %s",
-                str(np.stack(self.dealer_history)).replace("\n", " ->"),
+                str(np.stack(self._dealer_history)).replace("\n", " ->"),
             )
         # Human-readable option enables default rendering
         if self.render_mode == "human":
             self.render()
-        return tuple(map(int, self.player_state))
+        return tuple(map(int, self._player_state))
 
     def _get_player_score(self, state: np.ndarray) -> None:
         """Recalculate the player score."""
@@ -293,14 +342,14 @@ class DiceBlackJack(gym.Env):
             )
             self.done = True
             return 1.0  # Dealer's bust
-        elif self.player_state[0] > self.dealer_state[0] and self.done:
+        elif self._player_state[0] > self._dealer_state[0] and self.done:
             logger.info(
                 "Game ended with the player's victory: %02d > %02d",
                 self._player_min_score,
                 self._dealer_min_score,
             )
             return 1.0  # Player's victory
-        elif self.player_state[0] < self.dealer_state[0] and self.done:
+        elif self._player_state[0] < self._dealer_state[0] and self.done:
             logger.info(
                 "Game ended with the dealer's victory: %02d < %02d",
                 self._player_min_score,
@@ -308,7 +357,7 @@ class DiceBlackJack(gym.Env):
             )
             self.done = True
             return -1.0  # Score lose
-        elif self.player_state[0] == self.dealer_state[0] and self.done:
+        elif self._player_state[0] == self._dealer_state[0] and self.done:
             logger.info(
                 "Game ended with the draw: %02d = %02d",
                 self._player_min_score,
@@ -362,11 +411,11 @@ class DiceBlackJack(gym.Env):
             os.path.join(self._cwd, "assets/Grand9K_Pixel.ttf"), 48
         )
 
-        player_history = truncate_list(self.player_history)
+        player_history = truncate_list(self._player_history)
         for i, roll in enumerate(player_history):
             self._draw_roll(self.screen, 139 + 120 * i, 360, roll)
 
-        dealer_history = truncate_list(self.dealer_history)
+        dealer_history = truncate_list(self._dealer_history)
         for i, roll in enumerate(dealer_history):
             self._draw_roll(self.screen, 139 + 120 * i, 36, roll)
 
