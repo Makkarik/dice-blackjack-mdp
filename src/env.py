@@ -31,11 +31,10 @@
 
     STATE SPACE:
 
-    (25, 7, 7, 2)
+    (25, 7, 7)
 
     25 - The number of scores, rolled during the previous steps.
      7 - All possible values of the die, including 0, that designates the lack of die.
-     2 - The boolean value for indacting either the roll is the first or not.
 
     Some explanation regarding 24 options for the score.
 
@@ -78,7 +77,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 
-DEFAULT_STATE = np.array([0, 0, 0, True])
+DEFAULT_STATE = np.array([0, 0, 0])
 
 FIRST_DIE, SECOND_DIE, DICE_SUM = 0, 1, 2
 BUST_VALUE = 21
@@ -92,7 +91,7 @@ ACTIONS = {
     "stack_sum": 5,
 }
 
-WHITE = (253,) * 3
+WHITE = (0xFD,) * 3
 
 
 logger = logging.getLogger(__name__)
@@ -246,7 +245,6 @@ class DiceBlackJack(gym.Env):
                 self._chance = False
                 if is_double_score:
                     self._player_state[0] = 2 * dice[die_idx]
-                    self._player_state[3] = False
                 else:
                     self._player_state[0] += dice[die_idx]
                 self._player_state[1:3] = 0
@@ -265,7 +263,6 @@ class DiceBlackJack(gym.Env):
                 dice = np.append(dice, dice.sum())
                 if is_double_score:
                     self._player_state[0] = 2 * dice[die_idx]
-                    self._player_state[3] = False
                 else:
                     self._player_state[0] += dice[die_idx]
                 # Roll the dice!
@@ -321,7 +318,7 @@ class DiceBlackJack(gym.Env):
             min_score = 0
         elif state[0] > BUST_VALUE:
             min_score = state[0]
-        elif state[3]:
+        elif state[0] == 0:
             min_score = 2 * state[1:3].sum()
         else:
             min_score = state[0] + state[1:3].min()
@@ -444,9 +441,9 @@ class DiceBlackJack(gym.Env):
         surface.blit(score, score_rect)
 
         selection = pygame.image.load(os.path.join(self._cwd, "assets/select.png"))
-        if state[4] is not None and state[4] % 3 in {0, 2}:
+        if state[-1] is not None and state[-1] % 3 in {0, 2}:
             surface.blit(selection, (left + 6, top + 78))
-        if state[4] is not None and state[4] % 3 in {1, 2}:
+        if state[-1] is not None and state[-1] % 3 in {1, 2}:
             surface.blit(selection, (left + 6, top + 78 + 108))
 
         for i, die in enumerate(state[1:3]):
@@ -536,7 +533,6 @@ class Dealer:
             else:
                 self.total_score += dice.min()
             self._state[1:3] = dice
-            self._state[3] = 0
             self._roll += 1
             # Append state to the log
             self._state_history.append(np.append(self._state, action))
@@ -570,7 +566,7 @@ if __name__ == "__main__":
 
     # Choose the apropriate logging level
     logging.basicConfig(
-        level=logging.WARNING, stream=sys.stdout, format="[%(levelname)s] %(message)s"
+        level=logging.DEBUG, stream=sys.stdout, format="[%(levelname)s] %(message)s"
     )
 
     prompt = (
@@ -580,41 +576,36 @@ if __name__ == "__main__":
         "Enter the action: "
     )
     # Init the environment
-    env = DiceBlackJack(render_mode="human")
-    state, _ = env.reset()
-    done = False
-    logger.info("Initial state: %s", state)
-    if env.render_mode != "human":
-        logger.debug("Output array: %s", env.render().shape)
-    # Launch the while loop until the game is finished
-    while not done:
-        action = int(input(prompt)) - 1  # Map actions [1, 6] => [0, 5]
-        state, reward, done, _, _ = env.step(action)
-        logger.info(
-            "Action: %s, State: %s, Reward: %s, Done: %s", action, state, reward, done
-        )
+    env = DiceBlackJack(render_mode="human", fps=25)
+    while True:
+        state, _ = env.reset()
+        done = False
+        logger.info("Initial state: %s", state)
         if env.render_mode != "human":
             logger.debug("Output array: %s", env.render().shape)
-        if reward == 2:  # noqa: PLR2004
-            print("Blackjack!")
-        if reward < 0:
-            print("Player has lost")
-        elif reward > 0:
-            print("Player has won")
-        else:
-            print("Gane has ended with tie")
+        # Launch the while loop until the game is finished
+        while not done:
+            action = int(input(prompt)) - 1  # Map actions [1, 6] => [0, 5]
+            state, reward, done, _, _ = env.step(action)
+            logger.info(
+                "Action: %s, State: %s, Reward: %s, Done: %s",
+                action,
+                state,
+                reward,
+                done,
+            )
+            if env.render_mode != "human":
+                logger.debug("Output array: %s", env.render().shape)
+            if reward == 2:  # noqa: PLR2004
+                print("Blackjack!")
+            if reward < 0:
+                print("Player has lost")
+            elif reward > 0:
+                print("Player has won")
+            else:
+                print("Gane has ended with tie")
 
-    # Add a loop to keep the window open until the user closes it.
-    if env.render_mode == "human":
-        import keyboard
-
-        print("Game over. Press Enter to exit.")
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-            if keyboard.is_pressed("enter"):
-                running = False
+        if input("Game ended. Enter '0' to exit or any key to retry: ") == "0":
+            break
 
     pygame.quit()
