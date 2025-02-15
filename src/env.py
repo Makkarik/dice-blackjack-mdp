@@ -1,4 +1,68 @@
-"""Module for DiceBlackJack environment and associated Dealer class."""
+"""Module for DiceBlackJack environment and associated Dealer class.
+
+    RULES:
+
+1.  Player roll two dices at the first step. The sum of the dices is doubled and goes to
+    the initial player's score. After the first roll the player can either `hit` (roll
+    dice) or `stack` (stop rolling).
+
+2.  If player continues rolling the dice, he may choose at any step either he add to his
+    sum the value of any dice or a sum of the values. His main goal is to get more
+    points than dealer, but no more than 21.
+
+3.  When player stops rolling, the dealer starts the play. Dealer must roll dices until
+    he reach 17 point. The first step of the dealer gives him double score, at the
+    second step and further he may decide what die to choose to get the maximum score,
+    but stops as soon as scores 17 points or more.
+
+4.  The player wins the double bid (+1 point) if he scores more than dealer, but no more
+    than 21. If the player and dealer roll the same number, then the tie happens -
+    neither of them get the bid (0 points). If any player scored less point than the
+    dealer then he lose his bead (-1 point).
+
+5.  If any party get more than 21 points, the opposite party wins immediately.
+
+6.  If the player rolls two double values in a row at any step from the first roll, then
+    he gets a Blackjack and immediately wins. The Blackjack happens even if player
+    scored more than 21 points. The dealer can not roll the Blackjack at any case.
+
+    For further details see: https://www.chessandpoker.com/dice_blackjack.html
+
+
+    STATE SPACE:
+
+    (25, 7, 7, 2)
+
+    25 - The number of scores, rolled during the previous steps.
+     7 - All possible values of the die, including 0, that designates the lack of die.
+     2 - The boolean value for indacting either the roll is the first or not.
+
+    Some explanation regarding 24 options for the score.
+
+    It is obvious that you may get up to 27 points by stacking the sum of the dice in
+    the case, when it is still possible get no more than 21 points [16, 5, 6, X]. Thus,
+    the maximum possible value is 27. Also, it is impossible to get scores from 1 to 3,
+    as the minimal roll of dice yields 4 points at least. Therefore, the maximum number
+    of score variations is 28 - 3 = 25.
+
+    In real life most of the states are not reachable. The Q-Learning agent has
+    reached 910 states only after 100.000 iterations inside the training cycle.
+
+
+    REWARDS:
+
+    -1 point  - player lost or got busted
+     0 point  - if player got a tie or
+     1 point  - if player win or dealer got busted
+     2 points - if player roll the Blackjack: 2 points
+
+
+    ACTIONS:
+
+    0 - hit the first die      3 - stack the first die
+    1 - hit the second die     4 - stack the second die
+    2 - hit the sum of dice    5 - stack the sum of dice
+"""
 
 import logging
 import os
@@ -23,7 +87,8 @@ ACTIONS = {
     "stack_sum": 5,
 }
 
-WHITE = (253, 253, 253)
+WHITE = (253,) * 3
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +102,11 @@ class DiceBlackJack(gym.Env):
         """Initialize the environment."""
         super().__init__()
         self.action_space = gym.spaces.Discrete(6)
-        # Why score dimension is 24?
-        # Actually, there is a way to get to 27 by rolling 6 - 6, having 15 points for
-        # the previous rolls. Same goes to other cases, when it is possible to end game
-        # with victory by choosing the minimal die, but player decides to stack the sum.
-        # Adding to this example, that scores 1, 2 and 3 are impossible (as 1 - 1 at the
-        # first roll yields 4), we got 28 - 3 = 24.
-        self.observation_space = gym.spaces.MultiDiscrete([24, 7, 7, 2])
+        self.observation_space = gym.spaces.MultiDiscrete([25, 7, 7, 2])
         self.dealer = Dealer(self._roll_dice, dealer_th)
         self.render_mode = render_mode
         self.metadata["render_fps"] = fps
+        self.metadata["render_modes"] = ["human", "rgb_array"]
         self.done = True
 
         self._cwd = os.path.dirname(__file__)
@@ -137,9 +197,10 @@ class DiceBlackJack(gym.Env):
                     self.player_state[0] += dice[die_idx]
                 self.player_state[1:3] = 0
                 self._player_min_score = self._get_player_score(self.player_state)
-                # Engage dealer
-                self.dealer_history, self._dealer_min_score = self.dealer.play()
-                self.dealer_state = self.dealer_history[-1][:-1]
+                if self._player_min_score <= BUST_VALUE:
+                    # Engage dealer
+                    self.dealer_history, self._dealer_min_score = self.dealer.play()
+                    self.dealer_state = self.dealer_history[-1][:-1]
                 self.done = True
                 # Get the observation
                 logger.debug("Transition %s -> %s", previous_state, self.player_state)
@@ -218,13 +279,6 @@ class DiceBlackJack(gym.Env):
             self.done = True
             logger.info("Game ended with the Blackjack combination!")
             return 2.0  # Ultimate victory
-        elif self._dealer_min_score > BUST_VALUE:
-            logger.info(
-                "Game ended with the dealer's bust of score %02d",
-                self._dealer_min_score,
-            )
-            self.done = True
-            return 1.0  # Dealer's bust
         elif self._player_min_score > BUST_VALUE:
             logger.info(
                 "Game ended with the player's bust of score %02d",
@@ -232,6 +286,13 @@ class DiceBlackJack(gym.Env):
             )
             self.done = True
             return -1.0  # Bust lose
+        elif self._dealer_min_score > BUST_VALUE:
+            logger.info(
+                "Game ended with the dealer's bust of score %02d",
+                self._dealer_min_score,
+            )
+            self.done = True
+            return 1.0  # Dealer's bust
         elif self.player_state[0] > self.dealer_state[0] and self.done:
             logger.info(
                 "Game ended with the player's victory: %02d > %02d",
@@ -271,6 +332,9 @@ class DiceBlackJack(gym.Env):
                 'DiceBlackjack(render_mode="rgb_array")'
             )
             return
+        elif self.render_mode not in self.metadata["render_modes"]:
+            logger.warning('The render mode must be either "human" or "rgb_array"')
+            return
 
         # Window dimensions
         window_width, window_height = 920, 690
@@ -306,7 +370,6 @@ class DiceBlackJack(gym.Env):
         for i, roll in enumerate(dealer_history):
             self._draw_roll(self.screen, 139 + 120 * i, 36, roll)
 
-        # --- Finalize the frame based on render mode ---
         if self.render_mode == "human":
             pygame.event.pump()  # Process event queue
             pygame.display.flip()
@@ -380,7 +443,7 @@ class Dealer:
         if self._roll > 0:
             msg = "Dealer must be reset before next play."
             raise Exception(msg)
-
+        # The dealer uses the environment's random number generator
         dice = self._roll_generator()
         self._roll = 0
         self.total_score = 2 * dice.sum()  # First roll
@@ -394,31 +457,38 @@ class Dealer:
         while self.total_score < self._threshold:
             self._state[0] = self.total_score
             action = None
-            # Roll the dice
             dice = self._roll_generator()
-            if self.total_score + dice.min() > BUST_VALUE:
-                break
 
-            elif self.total_score + dice.sum() <= BUST_VALUE:
+            # The dealer is working by utilizing the decision tree with 6 joints. Its
+            # main goal is to maximize the total number of points, but stop after
+            # hitting 17 and not get busted.
+
+            # Firstly, the dealer check if it is possible to use both dice
+            if self.total_score + dice.sum() <= BUST_VALUE:
                 self.total_score += dice.sum()
-                action = self._hit_or_stack() + ACTIONS["hit_sum"]  # Add 2 literally
+                action = self._hit_or_stack() + ACTIONS["hit_sum"]
 
+            # Then the use of the greater die is considered
             elif self.total_score + dice.max() <= BUST_VALUE:
                 self.total_score += dice.max()
                 action = self._hit_or_stack() + dice.argmax()
 
+            # After that, the die with the smaller value is considered
             elif self.total_score + dice.min() <= BUST_VALUE:
                 self.total_score += dice.min()
                 action = self._hit_or_stack() + dice.argmin()
+
+            # Lastly, there is no way but to choose the smaller die and get the bust
             else:
                 self.total_score += dice.min()
             self._state[1:3] = dice
-            # If the roll is not first, change the value
+            self._state[3] = 0
             self._roll += 1
+            # Append state to the log
             self._state_history.append(np.append(self._state, action))
-        self._state[3] = int(self._roll == 0)
 
         if self.total_score <= BUST_VALUE:
+            # Get to the save terminating state
             self._state[0] = self.total_score
             self._state[1:3] = 0
             self._state_history.append(np.append(self._state, None))
@@ -435,12 +505,12 @@ class Dealer:
         self._roll = 0
 
 
-# Test snippet for the environment
+# Test snippet for the debugging purposes
 if __name__ == "__main__":
     import sys
 
     logging.basicConfig(
-        level=logging.DEBUG, stream=sys.stdout, format="[%(levelname)s] %(message)s"
+        level=logging.INFO, stream=sys.stdout, format="[%(levelname)s] %(message)s"
     )
     logging.logProcesses = False
 
