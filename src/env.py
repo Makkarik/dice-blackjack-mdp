@@ -52,9 +52,9 @@
     REWARDS:
 
     -1 point  - player lost or got busted
-     0 point  - if player got a tie or
-     1 point  - if player win or dealer got busted
-     2 points - if player roll the Blackjack: 2 points
+     0 point  - player got a tie
+     1 point  - player win or dealer got busted
+     2 points - player roll the Blackjack
 
 
     ACTIONS:
@@ -62,6 +62,11 @@
     0 - hit the first die      3 - stack the first die
     1 - hit the second die     4 - stack the second die
     2 - hit the sum of dice    5 - stack the sum of dice
+
+    CREDITS:
+
+    Grand9K Pixel font - Jayvee D. Enaguas (Grand Chaos), 2013.
+
 """
 
 import logging
@@ -137,7 +142,7 @@ class DiceBlackJack(gym.Env):
         """
         super().__init__()
         self.action_space = gym.spaces.Discrete(6)
-        self.observation_space = gym.spaces.MultiDiscrete([25, 7, 7, 2])
+        self.observation_space = gym.spaces.MultiDiscrete([28, 7, 7, 2])
         self.dealer = Dealer(self._roll_dice, dealer_th)
         self.render_mode = render_mode
         self.metadata["render_fps"] = fps
@@ -225,7 +230,7 @@ class DiceBlackJack(gym.Env):
             self.done = True
 
         else:
-            is_double_score = self._player_state[3]
+            is_double_score = self._player_state[0] == 0
             # If the first roll, map actions to choosing the sum of dice
             action = 3 * (action // 3) + 2 if is_double_score else action
             die_idx = action % 3
@@ -554,40 +559,56 @@ class Dealer:
         self._roll = 0
 
 
-# Test snippet for the debugging purposes
 if __name__ == "__main__":
+    """
+    The following snippet has been added for manula debugging and testing purposes.
+
+    To try a game, use the keys from 1 to 6. The game window will appear as soon as you
+    launch the current file.
+    """
     import sys
 
+    # Choose the apropriate logging level
     logging.basicConfig(
-        level=logging.INFO, stream=sys.stdout, format="[%(levelname)s] %(message)s"
+        level=logging.WARNING, stream=sys.stdout, format="[%(levelname)s] %(message)s"
     )
-    logging.logProcesses = False
 
     prompt = (
-        "Available actions:\n0 - hit first die;   1 - hit second die;   2 - hit sum;\n"
-        "3 - stack first die; 4 - stack second die; 5 - stack sum.\nEnter the action: "
+        "Available actions:\n"
+        "| 1 - hit first die   | 2 - hit second die   | 3 - hit sum   |\n"
+        "| 4 - stack first die | 5 - stack second die | 6 - stack sum |\n"
+        "Enter the action: "
     )
+    # Init the environment
     env = DiceBlackJack(render_mode="human")
     state, _ = env.reset()
     done = False
     logger.info("Initial state: %s", state)
     if env.render_mode != "human":
         logger.debug("Output array: %s", env.render().shape)
-
+    # Launch the while loop until the game is finished
     while not done:
-        action = int(input(prompt))
+        action = int(input(prompt)) - 1  # Map actions [1, 6] => [0, 5]
         state, reward, done, _, _ = env.step(action)
         logger.info(
             "Action: %s, State: %s, Reward: %s, Done: %s", action, state, reward, done
         )
         if env.render_mode != "human":
             logger.debug("Output array: %s", env.render().shape)
+        if reward == 2:  # noqa: PLR2004
+            print("Blackjack!")
+        if reward < 0:
+            print("Player has lost")
+        elif reward > 0:
+            print("Player has won")
+        else:
+            print("Gane has ended with tie")
 
     # Add a loop to keep the window open until the user closes it.
     if env.render_mode == "human":
         import keyboard
 
-        logger.info("Game over. Press Enter to exit.")
+        print("Game over. Press Enter to exit.")
         running = True
         while running:
             for event in pygame.event.get():
@@ -595,4 +616,5 @@ if __name__ == "__main__":
                     running = False
             if keyboard.is_pressed("enter"):
                 running = False
+
     pygame.quit()
