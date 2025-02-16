@@ -58,13 +58,13 @@ You may reproduce the results by launching the `Training.ipynb` notebook.
 
 We have trained the agent for 400.000 episodes with non-linear $\varepsilon$ decay.
 
-![Training statistics](analysis\training.jpg)
+![Training statistics](analysis/training.jpg)
 
 It is noticable, that the acquired policy is strong enough to get the positive feedback from the game (average reward greater than 0). To make the policy human-readable, we have converted the Q-table to the Dice Blackjack cheatsheet with all possible cases.
 
 The cells colored in gray designated the states with either no available actions or not encountered yet (heatmap for score of 5). 
 
-![Policy](analysis\policy.jpg)
+![Policy](analysis/policy.jpg)
 
 You may use the cheatsheet and play the game manually to check, if the policy is good enough or not.
 
