@@ -2,29 +2,29 @@
 
     RULES:
 
-1.  Player roll two dices at the first step. The sum of the dices is doubled and goes to
-    the initial player's score. After the first roll the player can either `hit` (roll
+1.  Player rolls two dice at the first step. The sum of the dice is doubled and goes to
+    the initial player's score. After the first roll, the player can either `hit` (roll
     dice) or `stack` (stop rolling).
 
-2.  If player continues rolling the dice, he may choose at any step either he add to his
-    sum the value of any dice or a sum of the values. His main goal is to get more
-    points than dealer, but no more than 21.
+2.  If the player continues rolling the dice, he may choose at any step either to add to
+    his sum the value of any die or the sum of the values. His main goal is to get more
+    points than the dealer, but no more than 21.
 
-3.  When player stops rolling, the dealer starts the play. Dealer must roll dices until
-    he reach 17 point. The first step of the dealer gives him double score, at the
-    second step and further he may decide what die to choose to get the maximum score,
-    but stops as soon as scores 17 points or more.
+3.  When the player stops rolling, the dealer starts to play. The dealer must roll dice
+    until he reaches 17 points. The first step of the dealer gives him double score; at
+    the second step and further, he may decide which die to choose to get the maximum
+    score, but stops as soon as he scores 17 points or more.
 
-4.  The player wins the double bid (+1 point) if he scores more than dealer, but no more
-    than 21. If the player and dealer roll the same number, then the tie happens -
-    neither of them get the bid (0 points). If any player scored less point than the
-    dealer then he lose his bead (-1 point).
+4.  The player wins the double bid (+1 point) if he scores more than the dealer, but no
+    more than 21. If the player and dealer roll the same number, then a tie happens -
+    neither of them gets the bid (0 points). If any player scores fewer points than the
+    dealer, then he loses his bid (-1 point).
 
-5.  If any party get more than 21 points, the opposite party wins immediately.
+5.  If any party gets more than 21 points, the opposite party wins immediately.
 
 6.  If the player rolls two double values in a row at any step from the first roll, then
-    he gets a Blackjack and immediately wins. The Blackjack happens even if player
-    scored more than 21 points. The dealer can not roll the Blackjack at any case.
+    he gets a Blackjack and immediately wins. The Blackjack happens even if the player
+    scores more than 21 points. The dealer cannot roll a Blackjack in any case.
 
     For further details see: https://www.chessandpoker.com/dice_blackjack.html
 
@@ -33,27 +33,27 @@
 
     (25, 7, 7)
 
-    25 - The number of scores, rolled during the previous steps.
-     7 - All possible values of the die, including 0, that designates the lack of die.
+    25 - The number of scores rolled during the previous steps.
+     7 - All possible values of the die, including 0, which designates the lack of a die
 
     Some explanation regarding 24 options for the score.
 
     It is obvious that you may get up to 27 points by stacking the sum of the dice in
-    the case, when it is still possible get no more than 21 points [16, 5, 6, X]. Thus,
-    the maximum possible value is 27. Also, it is impossible to get scores from 1 to 3,
-    as the minimal roll of dice yields 4 points at least. Therefore, the maximum number
-    of score variations is 28 - 3 = 25.
+    the case when it is still possible to get no more than 21 points [16, 5, 6, X].
+    Thus, the maximum possible value is 27. Also, it is impossible to get scores from 1
+    to 3, as the minimal roll of dice yields 4 points at least. Therefore, the maximum
+    numberof score variations is 28 - 3 = 25.
 
-    In real life most of the states are not reachable. The Q-Learning agent has
-    reached 910 states only after 100.000 iterations inside the training cycle.
+    In real life, most of the states are not reachable. The Q-Learning agent has
+    reached 910 states only after 100,000 iterations inside the training cycle.
 
 
     REWARDS:
 
     -1 point  - player lost or got busted
      0 point  - player got a tie
-     1 point  - player win or dealer got busted
-     2 points - player roll the Blackjack
+     1 point  - player won or dealer got busted
+     2 points - player rolled a Blackjack
 
 
     ACTIONS:
@@ -546,7 +546,7 @@ class Dealer:
 
     def _hit_or_stack(self) -> int:
         """Decide either hit or stack."""
-        return 3 if self.total_score <= self._threshold else 0
+        return 0 if self.total_score <= self._threshold else 3
 
     def reset(self):
         """Reset the dealer's internal state."""

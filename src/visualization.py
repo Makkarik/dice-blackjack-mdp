@@ -43,7 +43,7 @@ def show_training_stats(
         An environment wrapper.
     loss : list[float]
         A list of the step-wise losses.
-    roll_length : int = 1000
+    roll_length : int
         A length of rolling average.
 
     Returns
@@ -95,9 +95,7 @@ def show_inference_stats(env: gym.Wrapper, roll_length: int = 1000) -> Figure:
     ----------
     env : gym.Wrapper
         An environment wrapper.
-    loss : list[float]
-        A list of the step-wise losses.
-    roll_length : int = 1000
+    roll_length : int
         A length of rolling average.
 
     Returns
@@ -227,7 +225,14 @@ def plot_policy_tables_18(action_table, action_info) -> Figure:
 
 
 def mp4_to_gif(folder: str) -> None:
-    """Convert MP4 video to GIF."""
+    """Convert MP4 video to GIF.
+
+    Parameters
+    ----------
+    folder : str
+        The folder containing MP4 files to be converted.
+
+    """
     paths = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".mp4")]
     gif_paths = [p[: p.rfind(".")] + ".gif" for p in paths]
 

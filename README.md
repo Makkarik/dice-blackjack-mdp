@@ -23,9 +23,9 @@ poetry install
 ```
 ## Training Environment
 
-The Balckjack game is the game, that use a pair of dice instead of cards as a source of randomness. To get familiar with the game rules, you may see the original source at this [link](https://www.chessandpoker.com/dice_blackjack.html).
+The Blackjack game is the game, that use a pair of dice instead of cards as a source of randomness. To get familiar with the game rules, you may see the original source at this [link](https://www.chessandpoker.com/dice_blackjack.html).
 
-The Dice Blackjack has a state vector $\bold{s} = [p, d_1, d_2] \in \mathbb{S}$, 
+The Dice Blackjack has a state vector $s = [p, d_1, d_2] \in \mathbb{S}$, 
 
 where:
 
@@ -43,7 +43,7 @@ The action space consists of 6 actions:
 4 - stack the second die (**S2**);
 5 - stack the sum (**SΣ**).
 
-The game ends with on of four possible rewards:
+The game ends with one of four possible rewards:
 
 -1 - the player got busted (scored more than 21 points) or got less points than the dealer;
 0 - the game ended with a tie;
@@ -56,11 +56,11 @@ You may play the game by launching the environment file `/src/env.py` directly.
 
 You may reproduce the results by launching the `Training.ipynb` notebook.
 
-We have trained the agent for 400.000 episodes with non-linear $\varepsilon$ decay.
+We have trained the agent for 500.000 episodes with non-linear $\varepsilon$ decay.
 
 ![Training statistics](analysis/training.jpg)
 
-It is noticable, that the acquired policy is strong enough to get the positive feedback from the game (average reward greater than 0). To make the policy human-readable, we have converted the Q-table to the Dice Blackjack cheatsheet with all possible cases.
+It is noticeable, that the acquired policy is strong enough to get the positive feedback from the game (average reward greater than 0). To make the policy human-readable, we have converted the Q-table to the Dice Blackjack cheatsheet with all possible cases.
 
 The cells colored in gray designated the states with either no available actions or not encountered yet (heatmap for score of 5). 
 
@@ -70,6 +70,6 @@ You may use the cheatsheet and play the game manually to check, if the policy is
 
 ## Code style
 
-The repository is equipped with pre-commit hooks for autoamtic code linting. All the code style requirements are listed in `[tool.ruff.lint]` section of `pyproject.toml` file. 
+The repository is equipped with pre-commit hooks for automatic code linting. All the code style requirements are listed in `[tool.ruff.lint]` section of `pyproject.toml` file. 
 
-For better experince, use the VS Code IDE with the installed Ruff extension.
+For better experience, use the VS Code IDE with the installed Ruff extension.

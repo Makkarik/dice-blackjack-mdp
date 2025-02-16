@@ -19,12 +19,8 @@ class QLearningAgent:
         A learning rate.
     discount_factor : float
         A discount factor for computing the Q-values.
-    epsilon : float
-        The initial stochasticity value.
-    epsilon_decay : float
-        The decay for the epsilon.
-    final_epsilon : float
-        The final stochasticity value.
+    decay : Callable[float, float]
+        The deacy of the exploration rate during the training.
     random_generator : np.random.Generator
         The internal random generator.
     training_error : list[int]
@@ -56,7 +52,7 @@ class QLearningAgent:
         Parameters
         ----------
         env : gymnasium.Env
-            The agent's environmet.
+            The agent's environment.
         n_episodes : int
             The number of episodes for training.
         seed : int | None = None
@@ -170,7 +166,7 @@ class QLearningAgent:
         discount_factor : float = 0.95
             The discount factor for computing the Q-value
         epsilon_decay: Callable | None = None
-            A function, that map training progress [0, 1) to the epsilon value [0, 1].
+            A function, that maps training progress [0, 1) to the epsilon value [0, 1].
         progress : bool = True
             Progressbar toggle.
 
