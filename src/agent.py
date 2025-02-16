@@ -32,13 +32,16 @@ class QLearningAgent:
 
     Methods
     -------
-    get_action(env: gym.Env, obs: np.ndarray) -> int
+    respond(env: gym.Env, obs: np.ndarray) -> int
         A method, that returns the action for the given observation.
-    update(obs: np.ndarray, action: int, reward: float, terminated: bool,
-           ext_obs: np.ndarray) -> None
-        Updates the corresponding Q-value.
-    episode_step() ->
-        Updates the espsilon rate (must be called after each run).
+    reset() -> None
+        Reset the agent's internal state.
+    get_q_table() -> dict[tuple]:
+        Get the Q-table from the agent.
+    train(learning_rate: float, discount_factor: float = 0.95,
+        epsilon_decay: Callable[[float], float] | None = None, progress: bool = True,
+        ) -> list[float]:
+        Train the agent.
 
     """
 
@@ -72,7 +75,7 @@ class QLearningAgent:
         self.training_error = []
         self.trained = False
 
-    def get_action(self, env: gym.Env, obs: np.ndarray) -> int:
+    def _get_action(self, env: gym.Env, obs: np.ndarray) -> int:
         """Return the best action with probability (1 - epsilon) or a random one.
 
         Parameters
@@ -96,6 +99,27 @@ class QLearningAgent:
         else:
             # a = ARGMAX(Q, s)
             action = int(np.argmax(self.q_table[obs]))
+        return action
+
+    def respond(self, obs: np.ndarray) -> int:
+        """Yield the action by the observation.
+
+        Parameters
+        ----------
+        obs : np.ndarray
+            Obtained observation
+
+        Returns
+        -------
+        action : int
+            Action from the Q-table.
+
+        """
+        if not self.trained:
+            msg = "Agent must be trained first!"
+            raise Exception(msg)
+
+        action = int(np.argmax(self.q_table[obs]))
         return action
 
     def _update(
@@ -172,7 +196,7 @@ class QLearningAgent:
 
             # Play one episode
             while not done:
-                action = self.get_action(self.env, tuple(obs))
+                action = self._get_action(self.env, tuple(obs))
                 next_obs, reward, done, _, _ = self.env.step(action)
                 # Update the Q-value
                 self._update(obs, action, reward, done, next_obs)
