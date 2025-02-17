@@ -5,6 +5,7 @@ import os
 import gymnasium as gym
 import imageio
 import numpy as np
+import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.colors import BoundaryNorm, ListedColormap
@@ -246,3 +247,13 @@ def mp4_to_gif(folder: str) -> None:
             writer.close()
 
         os.remove(video_path)
+
+
+def get_rewards_stats(env: gym.Env) -> pd.DataFrame:
+    """Get the statistics of the rewards."""
+    rewards = pd.Series(env.return_queue).value_counts()
+    rewards = rewards.rename({1: "Victories", -1: "Losses", 0: "Ties", 2: "Blackjacks"})
+    stats = pd.DataFrame(columns=["Count", "Rate"])
+    stats["Count"] = rewards
+    stats["Rate"] = stats["Count"] / stats["Count"].sum()
+    return stats
